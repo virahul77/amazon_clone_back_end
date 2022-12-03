@@ -15,7 +15,7 @@ router.use(bodyParser.json());
 router.use(bodyParser.urlencoded({extended:true}));
 
 //Routes
-//api/users
+//GET api/users
 router.get('/',(req,res) => {
     res.status(200).json({
         status: 'success',
@@ -23,6 +23,7 @@ router.get('/',(req,res) => {
     })
 })
 
+//POST /api/user/register
 router.post('/register',
     [
         //check empty fields
