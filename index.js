@@ -12,13 +12,14 @@ const database = require('./database');
 const userRoutes = require('./routes/userRoute');
 app.use(cors());
 app.use(morgan('dev'));
+app.use(express.static('public'));
 
-app.use('/api/users',userRoutes);
+app.use('/api/user',userRoutes);
 //Route 
 app.get('/',(req,res)=>{
     return res.status(200).json({
         status: true,
-        message : "Amazon clone rest api home clone"
+        message : "Amazon clone rest api home clone",
     })
 })
 
