@@ -158,4 +158,15 @@ router.post(
       });
   }
 );
+
+const verifyToken = require('./../middleware/verify_token')
+
+//GET /api/user/testJWT
+router.get('/testJWT',verifyToken,(req,res)=>{
+  console.log(req.user);
+  return res.status(200).json({
+    status : true,
+    message : 'JWT Verified'
+  })
+})
 module.exports = router;
