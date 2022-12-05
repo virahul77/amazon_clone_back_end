@@ -6,7 +6,7 @@ const bodyParser = require("body-parser");
 const { check, validationResult, body } = require("express-validator");
 const jwt = require("jsonwebtoken");
 const moment = require("moment");
-
+const verifyToken = require('./../middleware/verify_token')
 const User = require("./../models/User");
 const token_key = process.env.TOKEN_KEY;
 const storage = require("./storage");
@@ -27,28 +27,45 @@ router.post(
   "/register",
   [
     //check empty fields
-    check("username").not().isEmpty().trim().escape(),
-    check("password").not().isEmpty().trim().escape(),
+    check("username").not().isEmpty().withMessage("validation.username_empty").trim().escape(),
+    check("password").not().isEmpty().withMessage('validation.password_empty').trim().escape(),
     //check email
-    check("email").isEmail().normalizeEmail(),
+    check("password2").not().isEmpty().withMessage('validation.password2_empty').trim().escape(),
+    //check email
+    check("email").isEmail().normalizeEmail().withMessage('validation.invalid_email'),
   ],
   async (req, res) => {
     const errors = validationResult(req);
     //check error is not empty
+    let error = {};
+    errors.array().forEach(err=> error[err.param]=err.msg)
     if (!errors.isEmpty()) {
-      return res.status(404).json({
-        status: "validate error",
-        errors: errors.array(),
+      return res.status(400).json({
+        status: false,
+        error,
         message : "form validation error"
       });
+    }
+
+    if(req.body.password !== req.body.password2){
+      return res.status(400).json({
+        status : false,
+        error : {
+          password2 : 'validation.password2_not_same'
+        },
+        message : 'form validation error'
+      })
     }
 
     User.findOne({ email: req.body.email })
       .then((user) => {
         if (user) {
           return res.status(409).json({
-            status: "fail",
-            message: "user email already exist",
+            status: false,
+            error : {
+              email : 'validation.email_exists'
+            },
+            message : 'user email already exist'
           });
         } else {
           const { email, username, password } = req.body;
@@ -69,8 +86,10 @@ router.post(
             })
             .catch((error) => {
               return res.status(502).json({
-                status: "failed",
-                error,
+                status: false,
+                error : {
+                  db_error : 'validation.db_error'
+                }
               });
             });
         }
@@ -78,27 +97,55 @@ router.post(
       .catch((error) => {
         return res.status(502).json({
           status: "failed",
-          error,
+          error : {
+            db_error : 'validation.db_error'
+          }
         });
       });
   }
 );
 
 //POST /api/user/uploadProfilePic
-router.post("/uploadProfilePic", (req, res) => {
+//access private
+router.post("/uploadProfilePic",verifyToken, (req, res) => {
   let upload = storage.getProfilePicUpload();
   upload(req, res, (error) => {
     if (error) {
       return res.status(400).json({
-        status: "failed upload",
+        status: false,
         error,
+        message : 'File upload fail..'
       });
     }
-    return res.status(200).json({
-      status: "success",
-      message: "File upload success",
-      file: req.file,
-    });
+    if(!req.file){
+      return res.status(400).json({
+        status : false,
+        error : {
+          profile_pic : 'validation.profile_pic_empty'
+        },
+        message : 'Please upload profic pic'
+      })
+    }
+    //if profile pic upload error
+    
+    //store new profile pic name
+    User.findByIdAndUpdate(req.user.id,{
+      $set : {
+        profile_pic : req.file.filename,
+        updatedAt : moment().format("DD/MM/YYYY")+";"+moment().format("hh:mm:ss")
+      }
+    }).then(user => {
+      return res.status(200).json({
+        status: "success",
+        message: "File upload success",
+        profile_pic : "http://localhost:5000/public_pic/"+req.file.filename
+      });
+    }).catch(error => {
+      return res.status(502).json({
+        status : false,
+        message : 'Database Error'
+      })
+    })
   });
 });
 
@@ -107,17 +154,18 @@ router.post(
   "/login",
   [
     //check empty fields
-    check("email").not().isEmpty().trim().escape(),
-    check("password").not().isEmpty().trim().escape(),
+    check("password").not().isEmpty().withMessage('validation.password_empty').trim().escape(),
     //check email
-    check("email").isEmail().normalizeEmail(),
+    check("email").isEmail().normalizeEmail().withMessage('validation.invalid_email'),
   ],
   (req, res) => {
     const errors = validationResult(req);
+    let error = {}
+    errors.array().forEach(err=> error[err.param]=err.msg)
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: "failed",
-        errors: errors.array(),
+      return res.status(404).json({
+        status: false,
+        error, 
         message : "form validation error"
       });
     }
@@ -126,15 +174,20 @@ router.post(
       .then((user) => {
         if (!user) {
           return res.status(404).json({
-            status: "failed",
-            message: "User Don,t exist",
+            status: false,
+            error : {
+              email : 'validation.email_not_exists'
+            },
+            message : 'User do,nt exist'
           });
         } else {
           let isPasswordMatch = bcrypt.compareSync(req.body.password,user.password);
           if(!isPasswordMatch){
             return res.status(401).json({
-              status : 'failed',
-              message : 'password dont match'
+              status : false,
+              eror : {
+                password : 'validation.password_not_match'
+              }
             })
           }
           let token = jwt.sign({id:user._id,email:user.email},token_key,{
@@ -142,7 +195,7 @@ router.post(
           })
 
           return res.status(200).json({
-            status: "success",
+            status: true,
             message: "user login success",
             token,
             user
@@ -151,15 +204,15 @@ router.post(
       })
       .catch((error) => {
         return res.status(502).json({
-          status: "failed",
-          message: "datatbase error",
-          error,
+          status: false,
+          message: "Database error",
+          error : {
+            db_error : 'validation.db_error'
+          }
         });
       });
   }
 );
-
-const verifyToken = require('./../middleware/verify_token')
 
 //GET /api/user/testJWT
 router.get('/testJWT',verifyToken,(req,res)=>{
