@@ -222,4 +222,89 @@ router.get('/testJWT',verifyToken,(req,res)=>{
     message : 'JWT Verified'
   })
 })
+//access private POST /api/user/change_password
+router.put(
+  "/change_password",verifyToken,
+  [
+    //check empty fields
+    check("username").not().isEmpty().withMessage("validation.username_empty").trim().escape(),
+    check("newPassword").not().isEmpty().withMessage('validation.password_empty').trim().escape(),
+    check("newPassword2").not().isEmpty().withMessage('validation.password2_empty').trim().escape(),
+    check("oldPassword").not().isEmpty().withMessage('validation.password_empty').trim().escape()
+  ],
+  (req, res) => {
+    const errors = validationResult(req);
+    //check error is not empty
+    let error = {};
+    errors.array().forEach(err=> error[err.param]=err.msg)
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        status: false,
+        error,
+        message : "form validation error"
+      });
+    }
+
+    if(req.body.newPassword !== req.body.newPassword2){
+      return res.status(400).json({
+        status : false,
+        error : {
+          password2 : 'validation.password2_not_same'
+        },
+        message : 'form validation error'
+      })
+    }
+    // console.log(req.user.id);
+    User.findOne({ _id: req.user.id })
+      .then((user) => {
+        //check oldpassword match with password
+        // console.log('yy');
+        const isMatch = bcrypt.compareSync(req.body.oldPassword,user.password)
+        console.log(isMatch);
+        if(!isMatch){
+          return res.status(400).json({
+            status : false,
+            error : {
+              oldPassword : 'validation.oldPassword_not_match'
+            },
+            message : 'old password does not match'
+          })
+        }
+
+        //update new password
+        const newData = {
+          username : req.body.username,
+          password : bcrypt.hashSync(req.body.newPassword,bcrypt.genSaltSync(10)),
+          updatedAt : moment().format("DD/MM/YYYY")+";"+moment().format("hh:mm:ss")
+        }
+
+        User.findOneAndUpdate({_id:req.user.id},{$set:newData},{new:true}).then((user)=>{
+          return res.status(200).json({
+            status : true,
+            user : {
+              username : user.username
+            },
+            message : "password change successfully"
+          })
+        }).catch((err)=>{
+          return res.status(502).json({
+            status : false,
+            error : {
+              db_error : 'validation.db_error'
+            },
+          })
+        })
+      })
+      .catch(err => {
+        return res.status(502).json({
+          status: "failed",
+          error : {
+            db_error : 'validation.db_error'
+          },
+          msg:err
+        });
+      });
+  }
+);
+
 module.exports = router;
