@@ -137,9 +137,15 @@ router.post(
               message : 'password dont match'
             })
           }
+          let token = jwt.sign({id:user._id,email:user.email},token_key,{
+            expiresIn : 3600
+          })
+
           return res.status(200).json({
             status: "success",
             message: "user login success",
+            token,
+            user
           });
         }
       })
