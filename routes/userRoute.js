@@ -9,7 +9,7 @@ const moment = require("moment");
 
 const User = require("./../models/User");
 const token_key = process.env.TOKEN_KEY;
-const storage = require('./storage');
+const storage = require("./storage");
 router.use(bodyParser.json());
 router.use(bodyParser.urlencoded({ extended: true }));
 
@@ -39,6 +39,7 @@ router.post(
       return res.status(404).json({
         status: "validate error",
         errors: errors.array(),
+        message : "form validation error"
       });
     }
 
@@ -84,23 +85,71 @@ router.post(
 );
 
 //POST /api/user/uploadProfilePic
-router.post('/uploadProfilePic',(req,res)=>{
-    let upload = storage.getProfilePicUpload();
+router.post("/uploadProfilePic", (req, res) => {
+  let upload = storage.getProfilePicUpload();
+  upload(req, res, (error) => {
+    if (error) {
+      return res.status(400).json({
+        status: "failed upload",
+        error,
+      });
+    }
+    return res.status(200).json({
+      status: "success",
+      message: "File upload success",
+      file: req.file,
+    });
+  });
+});
 
-    upload(req,res,error=>{
-        if(error){
-            return res.status(400).json({
-                status: 'failed upload',
-                error
+// POST user login route
+router.post(
+  "/login",
+  [
+    //check empty fields
+    check("email").not().isEmpty().trim().escape(),
+    check("password").not().isEmpty().trim().escape(),
+    //check email
+    check("email").isEmail().normalizeEmail(),
+  ],
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        status: "failed",
+        errors: errors.array(),
+        message : "form validation error"
+      });
+    }
+
+    User.findOne({ email: req.body.email })
+      .then((user) => {
+        if (!user) {
+          return res.status(404).json({
+            status: "failed",
+            message: "User Don,t exist",
+          });
+        } else {
+          let isPasswordMatch = bcrypt.compareSync(req.body.password,user.password);
+          if(!isPasswordMatch){
+            return res.status(401).json({
+              status : 'failed',
+              message : 'password dont match'
             })
+          }
+          return res.status(200).json({
+            status: "success",
+            message: "user login success",
+          });
         }
-        return res.status(200).json({
-            status: 'success',
-            message : "File upload success",
-            file : req.file,
-        })
-    })
-})
-
+      })
+      .catch((error) => {
+        return res.status(502).json({
+          status: "failed",
+          message: "datatbase error",
+          error,
+        });
+      });
+  }
+);
 module.exports = router;
-
