@@ -10,6 +10,7 @@ const verifyToken = require('./../middleware/verify_token')
 const User = require("./../models/User");
 const token_key = process.env.TOKEN_KEY;
 const storage = require("./storage");
+const fs = require('fs');
 router.use(bodyParser.json());
 router.use(bodyParser.urlencoded({ extended: true }));
 
@@ -135,10 +136,17 @@ router.post("/uploadProfilePic",verifyToken, (req, res) => {
         updatedAt : moment().format("DD/MM/YYYY")+";"+moment().format("hh:mm:ss")
       }
     }).then(user => {
+      if(user.profile_pic !== 'empty-avatar.jpg')
+        fs.unlinkSync(`${__dirname}/../public/public_pic/${user.profile_pic}`);
       return res.status(200).json({
         status: "success",
         message: "File upload success",
-        profile_pic : "http://localhost:5000/public_pic/"+req.file.filename
+        user : {
+          username : user.username,
+          email : user.email,
+          id : user._id,
+          profile_pic : req.file.filename
+        }
       });
     }).catch(error => {
       return res.status(502).json({
